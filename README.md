@@ -4,8 +4,9 @@ MenuMeters is a set of CPU, memory, disk, and network meters for the macOS
 menu bar. It is based on the classic MenuMeters by Alex Harper, was kept
 running on modern macOS by Yuji Tachikawa and many contributors, and was
 rewritten in Swift by gonejack. This fork adds an audit of that rewrite, the
-fixes it found, and signed automatic updates. Releases are published at
-<https://www.salamacchine.it/apps/menumeters/>.
+fixes it found, and signed automatic updates. The project's home is
+<https://menumeters-osx.github.io>; releases and issues are on
+[GitHub](https://github.com/menumeters-osx/MenuMeters).
 
 ## Requirements
 
