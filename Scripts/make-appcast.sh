@@ -22,7 +22,7 @@ set -euo pipefail
 source "$(dirname "$0")/build-common.sh"
 cd "$PROJECT_ROOT"
 
-REPO_URL="https://github.com/lgibelli/MenuMeters"
+REPO_URL="https://github.com/menumeters-osx/MenuMeters"
 SITE_URL="https://www.salamacchine.it/apps/menumeters/"
 
 SPARKLE="$(fetch_sparkle)"

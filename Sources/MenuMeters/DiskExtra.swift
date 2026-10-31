@@ -27,6 +27,7 @@
 //  Changes:
 //  2026-10     gonejack: rewritten in Swift from the Objective-C original.
 //  2026-10-30  Luca Gibelli: safer, asynchronous eject with error reporting.
+//  2026-10-31  Luca Gibelli: volume rows shown in the item title, which macOS 27 draws.
 //
 
 import Cocoa
@@ -163,7 +164,12 @@ final class DiskExtra: MenuExtraBase {
         for (index, volume) in volumes.enumerated() {
             let item = extraMenu.addItem(withTitle: "", action: #selector(openOrEjectVolume(_:)),
                                          keyEquivalent: "")
-            item.image = itemImages[index]
+            // macOS 27 does not draw a menu item's image, so the row goes in
+            // the title instead.
+            let row = NSTextAttachment()
+            row.image = itemImages[index]
+            row.bounds = NSRect(origin: .zero, size: itemImages[index].size)
+            item.attributedTitle = NSAttributedString(attachment: row)
             item.representedObject = volume.path
             item.target = self
         }
