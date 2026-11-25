@@ -256,47 +256,72 @@ private enum IntelSMC {
 
     private static var descriptions: [String: String] = {
         var result: [String: String] = [:]
+
         guard let library = dlopen("/usr/lib/libSMC.dylib", RTLD_LAZY) else { return result }
         defer { dlclose(library) }
         guard let symbol = dlsym(library, "AccumulatorPlatformStructLookupArray") else { return result }
 
-        let lookup = symbol.assumingMemoryBound(to: UInt8.self)
+        let lookupBase = UnsafeRawPointer(symbol)
         var offset = 0
         var stop = false
-        while !stop, lookup[offset] != 0, lookup[offset] < 128 {
+
+        while !stop {
+            let branch = lookupBase.loadUnaligned(fromByteOffset: offset, as: UInt64.self)
+            if branch == 0 { break }
+
             for set in 0..<2 {
-                let descriptionsPointer = lookup.advanced(by: offset + 16 + set * 8)
-                    .withMemoryRebound(to: UnsafeMutableRawPointer?.self, capacity: 1) { $0.pointee }
-                let count = lookup.advanced(by: offset + 32 + set * 4)
-                    .withMemoryRebound(to: UInt32.self, capacity: 1) { $0.pointee }
-                guard let descriptionsPointer else { continue }
+                let pointerOffset = offset + 16 + set * 8
+                let countOffset = offset + 32 + set * 4
+
+                let descriptionsPointer = lookupBase.loadUnaligned(
+                    fromByteOffset: pointerOffset,
+                    as: UnsafeMutableRawPointer?.self
+                )
+
+                let count = lookupBase.loadUnaligned(
+                    fromByteOffset: countOffset,
+                    as: UInt32.self
+                )
+
+                // Guard against count being rubbish
+                guard let descriptionsPointer, count > 0, count < 10_000 else { continue }
+
+                let entries = UnsafeRawPointer(descriptionsPointer)
+
                 for index in 0..<Int(count) {
-                    let entry = descriptionsPointer.advanced(by: index * 272)
-                    let pad1 = entry.advanced(by: 262).withMemoryRebound(to: UInt16.self, capacity: 1) { $0.pointee }
-                    let pad2 = entry.advanced(by: 268).withMemoryRebound(to: UInt32.self, capacity: 1) { $0.pointee }
+                    let entry = entries.advanced(by: index * 272)
+
+                    // Read unaligned rather than assuming the type
+                    let pad1 = entry.loadUnaligned(fromByteOffset: 262, as: UInt16.self)
+                    let pad2 = entry.loadUnaligned(fromByteOffset: 268, as: UInt32.self)
+
                     if pad1 != 0 || pad2 != 0 {
                         stop = true
                         break
                     }
-                    let keyBytes = [
-                        entry.load(fromByteOffset: 3, as: UInt8.self),
-                        entry.load(fromByteOffset: 2, as: UInt8.self),
-                        entry.load(fromByteOffset: 1, as: UInt8.self),
-                        entry.load(fromByteOffset: 0, as: UInt8.self),
-                    ]
+
+                    let keyBytes = (0..<4).reversed().map { entry.load(fromByteOffset: $0, as: UInt8.self) }
+
                     guard let key = String(bytes: keyBytes, encoding: .ascii) else { continue }
-                    let raw = UnsafeBufferPointer(start: entry.advanced(by: 5).assumingMemoryBound(to: UInt8.self),
-                                                  count: 256)
-                    let length = raw.prefix { $0 != 0 }.count
-                    let text = String(bytes: raw.prefix(length), encoding: .utf8) ?? ""
-                    result[key] = text
+
+                    var textBytes: [UInt8] = []
+                    for byteOffset in 5..<261 {
+                        let byte = entry.load(fromByteOffset: byteOffset, as: UInt8.self)
+                        // Stop if NULL
+                        if byte == 0 { break }
+                        textBytes.append(byte)
+                    }
+
+                    result[key] = String(bytes: textBytes, encoding: .utf8) ?? ""
                 }
             }
+
             offset += 48
         }
+
         return result
     }()
-
+    
     static func displayName(for sensor: String) -> String {
         guard let raw = descriptions[sensor] else { return sensor }
         let cleaned = raw
